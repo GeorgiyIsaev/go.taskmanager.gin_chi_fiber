@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>TASK MANAGER</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .btn-create {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn-create:hover {
+            background: #0056b3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f2f2f2;
+        }
+        .epic-row td {
+            border-top: 3px solid #999; /* жирная линия перед эпиком */
+        }
+        .epic-row:first-child td {
+            border-top: none; /* у первого эпика убираем верхнюю границу */
+        }
+        .subtask-row td:first-child {
+            padding-left: 30px; /* смещение подзадач */
+        }
+        .actions {
+            display: flex;
+            gap: 5px;
+        }
+        .btn-edit {
+            padding: 6px 12px;
+            background: #ffc107;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        .btn-edit:hover {
+            background: #e0a800;
+        }
+        .empty-actions {
+            /* пустая ячейка для подзадач */
+        }
+        .message {
+            color: #dc3545;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TASK MANAGER</h1>
+        <a href="create.html" class="btn-create">Создать задачу</a>
+        <div id="message" class="message"></div>
+        <table id="tasksTable">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Описание</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/taskmanager';
+
+        async function loadTasks() {
+            try {
+                const res = await fetch(`${API_BASE}/tasks`);
+                if (!res.ok) throw new Error(`Ошибка ${res.status}`);
+                const data = await res.json();
+                renderTasks(data);
+            } catch (err) {
+                document.getElementById('message').textContent = 'Не удалось загрузить задачи. Убедитесь, что сервер запущен.';
+                console.error(err);
+            }
+        }
+
+        function renderTasks(epics) {
+            const tbody = document.querySelector('#tasksTable tbody');
+            tbody.innerHTML = '';
+
+            if (!epics || epics.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">Нет задач</td></tr>';
+                return;
+            }
+
+            epics.forEach(epic => {
+                // Строка эпика
+                const epicRow = document.createElement('tr');
+                epicRow.className = 'epic-row';
+                epicRow.innerHTML = `
+                    <td>${escapeHtml(epic.title)}</td>
+                    <td>${escapeHtml(epic.description)}</td>
+                    <td>${escapeHtml(epic.status)}</td>
+                    <td class="actions">
+                        <a href="edit.html?id=${epic.id}" class="btn-edit">Изменить</a>
+                    </td>
+                `;
+                tbody.appendChild(epicRow);
+
+                // Строки подзадач (если есть)
+                if (epic.subtasks && epic.subtasks.length > 0) {
+                    epic.subtasks.forEach(sub => {
+                        const subRow = document.createElement('tr');
+                        subRow.className = 'subtask-row';
+                        subRow.innerHTML = `
+                            <td>${escapeHtml(sub.title)}</td>
+                            <td>${escapeHtml(sub.description)}</td>
+                            <td>${escapeHtml(sub.status)}</td>
+                            <td class="empty-actions"></td> <!-- у подзадач нет кнопки Изменить -->
+                        `;
+                        tbody.appendChild(subRow);
+                    });
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Загрузка при старте
+        loadTasks();
+    </script>
+</body>
+</html>

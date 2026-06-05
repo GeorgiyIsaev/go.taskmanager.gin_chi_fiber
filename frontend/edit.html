@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>TASK MANAGER — Редактирование задачи</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        h2 {
+            margin-top: 30px;
+            margin-bottom: 10px;
+            color: #555;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 15px;
+            color: #007bff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f2f2f2;
+        }
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 40px;
+        }
+        .actions {
+            display: flex;
+            gap: 5px;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-save {
+            background: #28a745;
+            color: white;
+        }
+        .btn-save:hover {
+            background: #218838;
+        }
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-delete:hover {
+            background: #c82333;
+        }
+        .btn-add {
+            background: #007bff;
+            color: white;
+        }
+        .btn-add:hover {
+            background: #0056b3;
+        }
+        .message {
+            margin-top: 10px;
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">&larr; На главную</a>
+        <h1>Редактирование задачи</h1>
+        <div id="message" class="message"></div>
+
+        <!-- Таблица эпика -->
+        <h2>Задача</h2>
+        <table id="epicTable">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Описание</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <!-- Таблица подзадач -->
+        <h2>Подзадачи</h2>
+        <table id="subtasksTable">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Описание</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/taskmanager';
+        const urlParams = new URLSearchParams(window.location.search);
+        const epicId = urlParams.get('id');
+
+        if (!epicId) {
+            alert('Не указан ID задачи для редактирования');
+            window.location.href = 'index.html';
+        }
+
+        let epicData = null;
+        const statusOptions = ['Новая', 'В процессе', 'Выполнена'];
+
+        // Загрузка данных эпика и подзадач
+        async function loadEpic() {
+            try {
+                const res = await fetch(`${API_BASE}/task?id=${epicId}`);
+                if (!res.ok) throw new Error('Ошибка загрузки');
+                epicData = await res.json();
+                renderEpicTable();
+                renderSubtasksTable();
+                document.getElementById('message').textContent = '';
+            } catch (err) {
+                showMessage('Не удалось загрузить задачу', 'danger');
+            }
+        }
+
+        function renderEpicTable() {
+            const tbody = document.querySelector('#epicTable tbody');
+            tbody.innerHTML = '';
+
+            if (!epicData) return;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="text" class="epic-title" value="${escapeHtml(epicData.title)}"></td>
+                <td><textarea class="epic-desc">${escapeHtml(epicData.description || '')}</textarea></td>
+                <td>
+                    <select class="epic-status">
+                        ${statusOptions.map(opt => `<option value="${opt}" ${epicData.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="actions">
+                    <button class="btn btn-save" id="saveEpicBtn">Сохранить</button>
+                    <button class="btn btn-delete" id="deleteEpicBtn">Удалить</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+
+            document.getElementById('saveEpicBtn').addEventListener('click', saveEpic);
+            document.getElementById('deleteEpicBtn').addEventListener('click', deleteEpic);
+        }
+
+        function renderSubtasksTable() {
+            const tbody = document.querySelector('#subtasksTable tbody');
+            tbody.innerHTML = '';
+
+            // Строка для создания новой подзадачи (первая)
+            const addRow = document.createElement('tr');
+            addRow.innerHTML = `
+                <td><input type="text" id="newSubTitle" placeholder="Название"></td>
+                <td><input type="text" id="newSubDesc" placeholder="Описание"></td>
+                <td>
+                    <select id="newSubStatus">
+                        ${statusOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <button class="btn btn-add" id="addSubtaskBtn">Создать подзадачу</button>
+                </td>
+            `;
+            tbody.appendChild(addRow);
+            document.getElementById('addSubtaskBtn').addEventListener('click', addSubtask);
+
+            // Существующие подзадачи
+            if (epicData.subtasks && epicData.subtasks.length > 0) {
+                epicData.subtasks.forEach(sub => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><input type="text" class="sub-title" data-id="${sub.id}" value="${escapeHtml(sub.title)}"></td>
+                        <td><textarea class="sub-desc" data-id="${sub.id}">${escapeHtml(sub.description || '')}</textarea></td>
+                        <td>
+                            <select class="sub-status" data-id="${sub.id}">
+                                ${statusOptions.map(opt => `<option value="${opt}" ${sub.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td class="actions">
+                            <button class="btn btn-save save-sub-btn" data-id="${sub.id}">Сохранить</button>
+                            <button class="btn btn-delete delete-sub-btn" data-id="${sub.id}">Удалить</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Добавляем обработчики для каждой подзадачи
+                document.querySelectorAll('.save-sub-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const id = e.target.dataset.id;
+                        saveSubtask(id);
+                    });
+                });
+                document.querySelectorAll('.delete-sub-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const id = e.target.dataset.id;
+                        deleteSubtask(id);
+                    });
+                });
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Сохранение эпика
+        async function saveEpic() {
+            const titleEl = document.querySelector('.epic-title');
+            const descEl = document.querySelector('.epic-desc');
+            const statusEl = document.querySelector('.epic-status');
+            const title = titleEl.value.trim();
+            if (!title) {
+                showMessage('Название эпика не может быть пустым', 'danger');
+                return;
+            }
+            const data = {
+                id: parseInt(epicId),
+                title,
+                description: descEl.value.trim(),
+                status: statusEl.value
+            };
+            try {
+                const res = await fetch(`${API_BASE}/epic/update`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) throw new Error('Ошибка сохранения');
+                showMessage('Эпик сохранён', 'success');
+                loadEpic(); // обновить данные на странице
+            } catch (err) {
+                showMessage('Не удалось сохранить эпик', 'danger');
+            }
+        }
+
+        // Удаление эпика (с предупреждением)
+        async function deleteEpic() {
+            const confirmed = confirm('Вы уверены, что хотите удалить этот эпик? Вместе с ним будут удалены ВСЕ его подзадачи!');
+            if (!confirmed) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/epic/delete?id=${epicId}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Ошибка удаления');
+                window.location.href = 'index.html';
+            } catch (err) {
+                showMessage('Не удалось удалить эпик', 'danger');
+            }
+        }
+
+        // Сохранение подзадачи
+        async function saveSubtask(id) {
+            const titleEl = document.querySelector(`.sub-title[data-id="${id}"]`);
+            const descEl = document.querySelector(`.sub-desc[data-id="${id}"]`);
+            const statusEl = document.querySelector(`.sub-status[data-id="${id}"]`);
+            if (!titleEl) return;
+            const title = titleEl.value.trim();
+            if (!title) {
+                showMessage('Название подзадачи не может быть пустым', 'danger');
+                return;
+            }
+            const data = {
+                id: parseInt(id),
+                title,
+                description: descEl.value.trim(),
+                status: statusEl.value
+            };
+            try {
+                const res = await fetch(`${API_BASE}/subtask/update`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) throw new Error('Ошибка сохранения');
+                showMessage('Подзадача сохранена', 'success');
+                loadEpic();
+            } catch (err) {
+                showMessage('Не удалось сохранить подзадачу', 'danger');
+            }
+        }
+
+        // Удаление подзадачи
+        async function deleteSubtask(id) {
+            if (!confirm('Удалить эту подзадачу?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/subtask/delete?id=${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Ошибка удаления');
+                showMessage('Подзадача удалена', 'success');
+                loadEpic();
+            } catch (err) {
+                showMessage('Не удалось удалить подзадачу', 'danger');
+            }
+        }
+
+        // Добавление новой подзадачи
+        async function addSubtask() {
+            const title = document.getElementById('newSubTitle').value.trim();
+            const description = document.getElementById('newSubDesc').value.trim();
+            const status = document.getElementById('newSubStatus').value;
+            if (!title) {
+                showMessage('Введите название подзадачи', 'danger');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/subtask/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title,
+                        description,
+                        status,
+                        epicId: parseInt(epicId)
+                    })
+                });
+                if (!res.ok) throw new Error('Ошибка создания');
+                showMessage('Подзадача создана', 'success');
+                loadEpic();
+            } catch (err) {
+                showMessage('Не удалось создать подзадачу', 'danger');
+            }
+        }
+
+        function showMessage(text, type) {
+            const msgEl = document.getElementById('message');
+            msgEl.textContent = text;
+            msgEl.style.color = type === 'danger' ? '#dc3545' : '#28a745';
+            setTimeout(() => msgEl.textContent = '', 3000);
+        }
+
+        // Первая загрузка
+        loadEpic();
+    </script>
+</body>
+</html>

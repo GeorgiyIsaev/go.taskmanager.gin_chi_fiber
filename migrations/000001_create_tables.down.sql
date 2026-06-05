@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS subtasks;
+DROP TABLE IF EXISTS epics;
+
