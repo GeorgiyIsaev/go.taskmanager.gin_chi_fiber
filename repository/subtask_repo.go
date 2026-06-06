@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"go.taskmanager/model"
+	"go.taskmanager.gin_chi_fiber/model"
 )
 
 func AddSubtask(sub *model.Subtask) error {
